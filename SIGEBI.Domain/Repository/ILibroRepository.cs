@@ -16,5 +16,6 @@ namespace SIGEBI.Domain.Repository
         Task<IReadOnlyList<Libro>> BuscarPorAutorAsync(string autor, CancellationToken ct = default);
         Task<int> ContarDisponiblesAsync(CancellationToken ct = default);
         Task<int> ContarPorEstadoAsync(EstadoLibro estado, CancellationToken ct = default);
+        Task<bool> IsbnExisteAsync(string isbn, Guid? excluirId = null, CancellationToken ct = default);
     }
 }

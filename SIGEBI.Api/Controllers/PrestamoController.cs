@@ -1,6 +1,8 @@
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using SIGEBI.Api.Dtos;
+using SIGEBI.Application.Prestamos.Commands;
+using SIGEBI.Application.Prestamos.Services;
 using SIGEBI.Domain.Entities;
 using SIGEBI.Domain.Repository;
 using SIGEBI.Domain.ValueObjects;
@@ -12,17 +14,14 @@ namespace SIGEBI.Api.Controllers;
 public class PrestamoController : ControllerBase
 {
     private readonly IPrestamoRepository _prestamoRepository;
-    private readonly ILibroRepository _libroRepository;
-    private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IPrestamoService _prestamoService;
 
     public PrestamoController(
         IPrestamoRepository prestamoRepository,
-        ILibroRepository libroRepository,
-        IUsuarioRepository usuarioRepository)
+        IPrestamoService prestamoService)
     {
         _prestamoRepository = prestamoRepository;
-        _libroRepository = libroRepository;
-        _usuarioRepository = usuarioRepository;
+        _prestamoService = prestamoService;
     }
 
     [HttpGet("{id:guid}")]
@@ -59,81 +58,26 @@ public class PrestamoController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<PrestamoDto>> Crear([FromBody] CrearPrestamoRequest request, CancellationToken ct)
     {
-        var libro = await _libroRepository.GetByIdAsync(request.LibroId, ct);
-        if (libro is null) return NotFound(new { message = "El libro indicado no existe." });
+        var prestamo = await _prestamoService.CrearAsync(
+            new CrearPrestamoCommand(request.LibroId, request.UsuarioId, request.FechaInicioUtc, request.FechaFinUtc),
+            ct);
 
-        var usuario = await _usuarioRepository.GetByIdAsync(request.UsuarioId, ct);
-        if (usuario is null) return NotFound(new { message = "El usuario indicado no existe." });
-
-        try
-        {
-            var periodo = PeriodoPrestamo.Create(request.FechaInicioUtc, request.FechaFinUtc);
-            var prestamo = Prestamo.Solicitar(request.LibroId, request.UsuarioId, periodo);
-
-            await _prestamoRepository.AddAsync(prestamo, ct);
-            return CreatedAtAction(nameof(ObtenerPorId), new { id = prestamo.Id }, Map(prestamo));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return CreatedAtAction(nameof(ObtenerPorId), new { id = prestamo.Id }, Map(prestamo));
     }
 
     [HttpPost("{id:guid}/activar")]
     public async Task<ActionResult<PrestamoDto>> Activar(Guid id, CancellationToken ct)
     {
-        var prestamo = await _prestamoRepository.GetByIdAsync(id, ct);
-        if (prestamo is null) return NotFound();
-
-        var libro = await _libroRepository.GetByIdAsync(prestamo.LibroId, ct);
-        if (libro is null) return NotFound(new { message = "El libro asociado al préstamo no existe." });
-
-        var usuario = await _usuarioRepository.GetByIdAsync(prestamo.UsuarioId, ct);
-        if (usuario is null) return NotFound(new { message = "El usuario asociado al préstamo no existe." });
-
-        try
-        {
-            libro.MarcarPrestado();
-            prestamo.Activar();
-            usuario.RegistrarPrestamo(prestamo.Id);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        await _libroRepository.UpdateAsync(libro, ct);
-        await _prestamoRepository.UpdateAsync(prestamo, ct);
-        await _usuarioRepository.UpdateAsync(usuario, ct);
-
+        var prestamo = await _prestamoService.ActivarAsync(new ActivarPrestamoCommand(id), ct);
         return Ok(Map(prestamo));
     }
 
     [HttpPost("{id:guid}/devolver")]
     public async Task<ActionResult<PrestamoDto>> RegistrarDevolucion(Guid id, [FromBody] RegistrarDevolucionRequest request, CancellationToken ct)
     {
-        var prestamo = await _prestamoRepository.GetByIdAsync(id, ct);
-        if (prestamo is null) return NotFound();
-
-        var libro = await _libroRepository.GetByIdAsync(prestamo.LibroId, ct);
-        if (libro is null) return NotFound(new { message = "El libro asociado al préstamo no existe." });
-
-        try
-        {
-            prestamo.MarcarDevuelto(request.FechaEntregaUtc, request.Observaciones);
-            libro.MarcarDevuelto();
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        await _prestamoRepository.UpdateAsync(prestamo, ct);
-        await _libroRepository.UpdateAsync(libro, ct);
+        var prestamo = await _prestamoService.RegistrarDevolucionAsync(
+            new RegistrarDevolucionCommand(id, request.FechaEntregaUtc, request.Observaciones),
+            ct);
 
         return Ok(Map(prestamo));
     }
@@ -141,52 +85,17 @@ public class PrestamoController : ControllerBase
     [HttpPost("{id:guid}/cancelar")]
     public async Task<ActionResult<PrestamoDto>> Cancelar(Guid id, [FromBody] CancelarPrestamoRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Motivo))
-        {
-            return BadRequest(new { message = "Debe indicar un motivo de cancelación." });
-        }
+        var prestamo = await _prestamoService.CancelarAsync(
+            new CancelarPrestamoCommand(id, request.Motivo),
+            ct);
 
-        var prestamo = await _prestamoRepository.GetByIdAsync(id, ct);
-        if (prestamo is null) return NotFound();
-
-        try
-        {
-            prestamo.Cancelar(request.Motivo.Trim());
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        await _prestamoRepository.UpdateAsync(prestamo, ct);
         return Ok(Map(prestamo));
     }
 
     [HttpPost("{id:guid}/extender")]
     public async Task<ActionResult<PrestamoDto>> Extender(Guid id, [FromBody] ExtenderPrestamoRequest request, CancellationToken ct)
     {
-        if (request.Dias <= 0)
-        {
-            return BadRequest(new { message = "Los días de extensión deben ser mayores a cero." });
-        }
-
-        var prestamo = await _prestamoRepository.GetByIdAsync(id, ct);
-        if (prestamo is null) return NotFound();
-
-        try
-        {
-            prestamo.Extender(request.Dias);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        await _prestamoRepository.UpdateAsync(prestamo, ct);
+        var prestamo = await _prestamoService.ExtenderAsync(new ExtenderPrestamoCommand(id, request.Dias), ct);
         return Ok(Map(prestamo));
     }
 

@@ -41,6 +41,9 @@ namespace SIGEBI.Persistence.Configurations
             builder.HasIndex(l => l.Titulo);
             builder.HasIndex(l => l.Autor);
             builder.HasIndex(l => l.Estado);
+            builder.HasIndex(l => l.Isbn)
+                   .IsUnique()
+                   .HasFilter("[Isbn] IS NOT NULL");
         }
     }
 }
