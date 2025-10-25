@@ -70,8 +70,32 @@ namespace SIGEBI.Domain.Entities
         public bool DisponibleParaPrestamo() =>
             Estado == EstadoLibro.Disponible && EjemplaresDisponibles > 0;
 
+        public void ReservarEjemplar()
+        {
+            if (!DisponibleParaPrestamo())
+                throw new InvalidOperationException("El libro no está disponible para reserva.");
+
+            EjemplaresDisponibles--;
+            if (EjemplaresDisponibles == 0)
+                Estado = EstadoLibro.Reservado;
+
+            Touch();
+        }
+
         public void MarcarPrestado()
         {
+            if (EjemplaresDisponibles == 0)
+            {
+                if (Estado == EstadoLibro.Reservado)
+                {
+                    Estado = EstadoLibro.Prestado;
+                    Touch();
+                    return;
+                }
+
+                throw new InvalidOperationException("El libro no está disponible para préstamo.");
+            }
+
             if (!DisponibleParaPrestamo())
                 throw new InvalidOperationException("El libro no está disponible para préstamo.");
 
@@ -82,13 +106,22 @@ namespace SIGEBI.Domain.Entities
             Touch();
         }
 
+        public void ConfirmarPrestamoReservado()
+        {
+            if (Estado == EstadoLibro.Reservado && EjemplaresDisponibles == 0)
+            {
+                Estado = EstadoLibro.Prestado;
+                Touch();
+            }
+        }
+
         public void MarcarDevuelto()
         {
             if (EjemplaresDisponibles >= EjemplaresTotales)
                 throw new InvalidOperationException("No hay ejemplares prestados para devolver.");
 
             EjemplaresDisponibles++;
-            if (Estado == EstadoLibro.Prestado)
+            if (Estado == EstadoLibro.Prestado || Estado == EstadoLibro.Reservado)
                 Estado = EstadoLibro.Disponible;
 
             Touch();

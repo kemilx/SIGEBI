@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using Moq;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Application.Prestamos.Commands;
 using SIGEBI.Application.Prestamos.Services;
 using SIGEBI.Application.Prestamos.Validators;
@@ -70,6 +71,8 @@ public class PrestamoServiceTests
                           .ReturnsAsync(usuario);
         _prestamoRepository.Setup(r => r.ExistePrestamoActivoOPendienteAsync(libro.Id, usuario.Id, It.IsAny<CancellationToken>()))
                            .ReturnsAsync(false);
+        _libroRepository.Setup(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()))
+                        .Returns(Task.CompletedTask);
         _prestamoRepository.Setup(r => r.AddAsync(It.IsAny<Prestamo>(), It.IsAny<CancellationToken>()))
                            .Returns(Task.CompletedTask);
 
@@ -79,7 +82,9 @@ public class PrestamoServiceTests
 
         Assert.Equal(libro.Id, prestamo.LibroId);
         Assert.Equal(usuario.Id, prestamo.UsuarioId);
+        Assert.Equal(2, libro.EjemplaresDisponibles);
         _prestamoRepository.Verify(r => r.AddAsync(It.IsAny<Prestamo>(), It.IsAny<CancellationToken>()), Times.Once);
+        _libroRepository.Verify(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -115,5 +120,62 @@ public class PrestamoServiceTests
         Assert.Equal(prestamo.Id, penalizacionCreada!.PrestamoId);
         Assert.True(penalizacionCreada.Monto > 0);
         _penalizacionRepository.Verify(r => r.AddAsync(It.IsAny<Penalizacion>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_RestauraDisponibles_CuandoPrestamoPendiente()
+    {
+        var libro = Libro.Create("Clean Architecture", "Robert C. Martin", 2);
+        libro.ReservarEjemplar();
+
+        var prestamo = Prestamo.Solicitar(libro.Id, Guid.NewGuid(),
+            PeriodoPrestamo.Create(DateTime.UtcNow, DateTime.UtcNow.AddDays(3)));
+
+        _prestamoRepository.Setup(r => r.GetByIdAsync(prestamo.Id, It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(prestamo);
+        _libroRepository.Setup(r => r.GetByIdAsync(libro.Id, It.IsAny<CancellationToken>()))
+                        .ReturnsAsync(libro);
+        _prestamoRepository.Setup(r => r.UpdateAsync(prestamo, It.IsAny<CancellationToken>()))
+                           .Returns(Task.CompletedTask);
+        _libroRepository.Setup(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()))
+                        .Returns(Task.CompletedTask);
+
+        var command = new CancelarPrestamoCommand(prestamo.Id, "Cancelado por el usuario");
+
+        await _sut.CancelarAsync(command, CancellationToken.None);
+
+        Assert.Equal(libro.EjemplaresTotales, libro.EjemplaresDisponibles);
+        _libroRepository.Verify(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()), Times.Once);
+        _prestamoRepository.Verify(r => r.UpdateAsync(prestamo, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_RestauraDisponibles_CuandoPrestamoActivo()
+    {
+        var libro = Libro.Create("Refactoring", "Martin Fowler", 1);
+        libro.ReservarEjemplar();
+        libro.ConfirmarPrestamoReservado();
+
+        var prestamo = Prestamo.Solicitar(libro.Id, Guid.NewGuid(),
+            PeriodoPrestamo.Create(DateTime.UtcNow, DateTime.UtcNow.AddDays(4)));
+        prestamo.Activar();
+
+        _prestamoRepository.Setup(r => r.GetByIdAsync(prestamo.Id, It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(prestamo);
+        _libroRepository.Setup(r => r.GetByIdAsync(libro.Id, It.IsAny<CancellationToken>()))
+                        .ReturnsAsync(libro);
+        _prestamoRepository.Setup(r => r.UpdateAsync(prestamo, It.IsAny<CancellationToken>()))
+                           .Returns(Task.CompletedTask);
+        _libroRepository.Setup(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()))
+                        .Returns(Task.CompletedTask);
+
+        var command = new CancelarPrestamoCommand(prestamo.Id, "Cancelación administrativa");
+
+        await _sut.CancelarAsync(command, CancellationToken.None);
+
+        Assert.Equal(libro.EjemplaresTotales, libro.EjemplaresDisponibles);
+        Assert.Equal(EstadoLibro.Disponible, libro.Estado);
+        _libroRepository.Verify(r => r.UpdateAsync(libro, It.IsAny<CancellationToken>()), Times.Once);
+        _prestamoRepository.Verify(r => r.UpdateAsync(prestamo, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

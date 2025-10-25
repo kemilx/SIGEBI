@@ -1,11 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SIGEBI.Domain.Entities;
+using SIGEBI.Domain.Repository;
 
 namespace SIGEBI.Persistence.Repositories
 {
     // No existe IRolRepository en Domain según las imágenes; se implementa
     // repositorio concreto mínimo para operaciones típicas sobre Roles.
-    public class RolRepository
+    public class RolRepository : IRolRepository
     {
         private readonly SIGEBIDbContext _context;
 
