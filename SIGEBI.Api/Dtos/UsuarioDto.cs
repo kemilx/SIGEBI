@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using SIGEBI.Domain.ValueObjects;
 
 namespace SIGEBI.Api.Dtos;
@@ -16,16 +17,16 @@ public record UsuarioDto(
     DateTime? ActualizadoUtc);
 
 public record CrearUsuarioRequest(
-    string Nombres,
-    string Apellidos,
-    string Email,
-    TipoUsuario Tipo);
+    [property: Required, StringLength(100)] string Nombres,
+    [property: Required, StringLength(120)] string Apellidos,
+    [property: Required, EmailAddress, StringLength(256)] string Email,
+    [property: Required] TipoUsuario Tipo);
 
 public record ActualizarUsuarioRequest(
-    string? Nombres,
-    string? Apellidos,
-    string? Email);
+    [property: StringLength(100)] string? Nombres,
+    [property: StringLength(120)] string? Apellidos,
+    [property: EmailAddress, StringLength(256)] string? Email);
 
 public record AsignarRolRequest(
-    string Nombre,
-    string? Descripcion);
+    [property: Required, StringLength(80)] string Nombre,
+    [property: StringLength(250)] string? Descripcion);

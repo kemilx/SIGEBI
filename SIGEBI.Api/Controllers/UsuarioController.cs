@@ -1,6 +1,9 @@
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
+using FluentValidation.Results;
 using SIGEBI.Api.Dtos;
+using SIGEBI.Application.Common.Exceptions;
 using SIGEBI.Domain.Entities;
 using SIGEBI.Domain.Repository;
 using SIGEBI.Domain.ValueObjects;
@@ -39,7 +42,7 @@ public class UsuarioController : ControllerBase
             var existente = await _usuarioRepository.GetByEmailAsync(emailVo.Value, ct);
             if (existente is not null)
             {
-                return Conflict(new { message = "El correo electrónico ya está registrado." });
+                throw new ConflictException("El correo electrónico ya está registrado.");
             }
 
             var usuario = Usuario.Create(
@@ -53,7 +56,7 @@ public class UsuarioController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Usuario), ex.Message);
         }
     }
 
@@ -73,7 +76,7 @@ public class UsuarioController : ControllerBase
                     var existente = await _usuarioRepository.GetByEmailAsync(emailVo.Value, ct);
                     if (existente is not null && existente.Id != usuario.Id)
                     {
-                        return Conflict(new { message = "El correo electrónico ya está en uso." });
+                        throw new ConflictException("El correo electrónico ya está en uso.");
                     }
 
                     usuario.CambiarEmail(emailVo);
@@ -86,7 +89,7 @@ public class UsuarioController : ControllerBase
             }
             else if (!string.IsNullOrWhiteSpace(request.Nombres) || !string.IsNullOrWhiteSpace(request.Apellidos))
             {
-                return BadRequest(new { message = "Debe indicar nombres y apellidos para actualizar el nombre completo." });
+                throw ValidationError(nameof(request.Nombres), "Debe indicar nombres y apellidos para actualizar el nombre completo.");
             }
 
             await _usuarioRepository.UpdateAsync(usuario, ct);
@@ -94,7 +97,7 @@ public class UsuarioController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Usuario), ex.Message);
         }
     }
 
@@ -123,11 +126,6 @@ public class UsuarioController : ControllerBase
     [HttpPost("{id:guid}/roles")]
     public async Task<ActionResult<UsuarioDto>> AsignarRol(Guid id, [FromBody] AsignarRolRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Nombre))
-        {
-            return BadRequest(new { message = "El nombre del rol es obligatorio." });
-        }
-
         var usuario = await _usuarioRepository.GetByIdAsync(id, ct);
         if (usuario is null) return NotFound();
 
@@ -150,7 +148,7 @@ public class UsuarioController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Rol), ex.Message);
         }
 
         usuario.AsignarRol(rol);
@@ -164,7 +162,7 @@ public class UsuarioController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(nombre))
         {
-            return BadRequest(new { message = "Debe indicar el nombre del rol a revocar." });
+            throw ValidationError(nameof(nombre), "Debe indicar el nombre del rol a revocar.");
         }
 
         var usuario = await _usuarioRepository.GetByIdAsync(id, ct);
@@ -175,6 +173,9 @@ public class UsuarioController : ControllerBase
 
         return Ok(Map(usuario));
     }
+
+    private static ValidationException ValidationError(string property, string message)
+        => new(new[] { new ValidationFailure(property, message) });
 
     private static UsuarioDto Map(Usuario usuario)
         => new(

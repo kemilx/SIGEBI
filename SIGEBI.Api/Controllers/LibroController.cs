@@ -1,6 +1,9 @@
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
+using FluentValidation.Results;
 using SIGEBI.Api.Dtos;
+using SIGEBI.Application.Common.Exceptions;
 using SIGEBI.Domain.Entities;
 using SIGEBI.Domain.Repository;
 using SIGEBI.Domain.ValueObjects;
@@ -32,7 +35,7 @@ public class LibroController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(titulo) && string.IsNullOrWhiteSpace(autor))
         {
-            return BadRequest(new { message = "Debe indicar un texto de búsqueda por título o autor." });
+            throw ValidationError(nameof(titulo), "Debe indicar un texto de búsqueda por título o autor.");
         }
 
         if (!string.IsNullOrWhiteSpace(titulo))
@@ -48,6 +51,12 @@ public class LibroController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<LibroDto>> Crear([FromBody] CrearLibroRequest request, CancellationToken ct)
     {
+        if (!string.IsNullOrWhiteSpace(request.Isbn) &&
+            await _libroRepository.IsbnExisteAsync(request.Isbn, null, ct))
+        {
+            throw new ConflictException("El ISBN indicado ya se encuentra registrado.");
+        }
+
         try
         {
             var libro = Libro.Create(
@@ -63,7 +72,7 @@ public class LibroController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Libro), ex.Message);
         }
     }
 
@@ -73,6 +82,12 @@ public class LibroController : ControllerBase
         var libro = await _libroRepository.GetByIdAsync(id, ct);
         if (libro is null) return NotFound();
 
+        if (!string.IsNullOrWhiteSpace(request.Isbn) &&
+            await _libroRepository.IsbnExisteAsync(request.Isbn, id, ct))
+        {
+            throw new ConflictException("El ISBN indicado ya se encuentra registrado.");
+        }
+
         try
         {
             libro.ActualizarDatos(request.Titulo, request.Autor, request.Isbn, request.FechaPublicacionUtc);
@@ -81,7 +96,7 @@ public class LibroController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Libro), ex.Message);
         }
     }
 
@@ -97,7 +112,7 @@ public class LibroController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(ex.ParamName ?? nameof(Libro), ex.Message);
         }
 
         await _libroRepository.UpdateAsync(libro, ct);
@@ -133,21 +148,26 @@ public class LibroController : ControllerBase
                     }
                     else if (libro.Estado != EstadoLibro.Disponible)
                     {
-                        return BadRequest(new { message = "No es posible marcar como disponible sin ejemplares prestados." });
+                        throw ValidationError(nameof(request.Estado), "No es posible marcar como disponible sin ejemplares prestados.");
                     }
                     break;
                 default:
-                    return BadRequest(new { message = "Estado no soportado." });
+                    throw ValidationError(nameof(request.Estado), "Estado no soportado.");
             }
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            throw ValidationError(nameof(request.Estado), ex.Message);
         }
 
         await _libroRepository.UpdateAsync(libro, ct);
         return Ok(Map(libro));
+
     }
+
+    private static ValidationException ValidationError(string property, string message)
+        => new(new[] { new ValidationFailure(property, message) });
+}
 
     private static LibroDto Map(Libro libro)
         => new(

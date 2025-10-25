@@ -48,5 +48,12 @@ namespace SIGEBI.Persistence.Repositories
 
         public async Task<int> ContarPorEstadoAsync(EstadoPrestamo estado, CancellationToken ct = default)
             => await _context.Prestamos.CountAsync(p => p.Estado == estado, ct);
+
+        public async Task<bool> ExistePrestamoActivoOPendienteAsync(Guid libroId, Guid usuarioId, CancellationToken ct = default)
+            => await _context.Prestamos
+                             .AsNoTracking()
+                             .AnyAsync(p => p.LibroId == libroId &&
+                                           p.UsuarioId == usuarioId &&
+                                           (p.Estado == EstadoPrestamo.Pendiente || p.Estado == EstadoPrestamo.Activo), ct);
     }
 }
