@@ -72,11 +72,8 @@ public sealed class PrestamoService : IPrestamoService
         }
 
         var periodo = PeriodoPrestamo.Create(command.FechaInicioUtc, command.FechaFinUtc);
-        libro.MarcarPrestado();
-
         var prestamo = Prestamo.Solicitar(command.LibroId, command.UsuarioId, periodo);
 
-        await _libroRepository.UpdateAsync(libro, ct);
         await _prestamoRepository.AddAsync(prestamo, ct);
         return prestamo;
     }
@@ -94,30 +91,19 @@ public sealed class PrestamoService : IPrestamoService
         var usuario = await _usuarioRepository.GetByIdAsync(prestamo.UsuarioId, ct)
                       ?? throw new NotFoundException(nameof(Usuario), prestamo.UsuarioId);
 
-        var ejemplarReservado = libro.EjemplaresDisponibles < libro.EjemplaresTotales;
-        var libroAjustadoEnActivacion = false;
-
-        if (!ejemplarReservado)
-        {
-            if (!libro.DisponibleParaPrestamo())
-            {
-                throw new ValidationException(new[]
-                {
-                    new ValidationFailure(nameof(prestamo.LibroId), "El libro no cuenta con ejemplares disponibles.")
-                });
-            }
-
-            libro.MarcarPrestado();
-            libroAjustadoEnActivacion = true;
-        }
-
         if (!usuario.Activo)
         {
             throw new ValidationException(new[] { new ValidationFailure(nameof(prestamo.UsuarioId), "El usuario debe estar activo para activar el préstamo.") });
         }
 
+        if (!libro.DisponibleParaPrestamo())
+        {
+            throw new ValidationException(new[] { new ValidationFailure(nameof(prestamo.LibroId), "El libro no cuenta con ejemplares disponibles.") });
+        }
+
         try
         {
+            libro.MarcarPrestado();
             prestamo.Activar();
             usuario.RegistrarPrestamo(prestamo.Id);
         }
@@ -126,11 +112,7 @@ public sealed class PrestamoService : IPrestamoService
             throw new ValidationException(new[] { new ValidationFailure(nameof(Prestamo.Estado), ex.Message) });
         }
 
-        if (libroAjustadoEnActivacion)
-        {
-            await _libroRepository.UpdateAsync(libro, ct);
-        }
-
+        await _libroRepository.UpdateAsync(libro, ct);
         await _prestamoRepository.UpdateAsync(prestamo, ct);
         await _usuarioRepository.UpdateAsync(usuario, ct);
 
@@ -175,9 +157,6 @@ public sealed class PrestamoService : IPrestamoService
 
         var prestamo = await _prestamoRepository.GetByIdAsync(command.PrestamoId, ct)
                        ?? throw new NotFoundException(nameof(Prestamo), command.PrestamoId);
-        var libro = await _libroRepository.GetByIdAsync(prestamo.LibroId, ct)
-                    ?? throw new NotFoundException(nameof(Libro), prestamo.LibroId);
-        var estadoAnterior = prestamo.Estado;
 
         try
         {
@@ -193,16 +172,6 @@ public sealed class PrestamoService : IPrestamoService
         }
 
         await _prestamoRepository.UpdateAsync(prestamo, ct);
-
-        if (estadoAnterior is EstadoPrestamo.Pendiente or EstadoPrestamo.Activo)
-        {
-            if (libro.EjemplaresDisponibles < libro.EjemplaresTotales)
-            {
-                libro.MarcarDevuelto();
-                await _libroRepository.UpdateAsync(libro, ct);
-            }
-        }
-
         return prestamo;
     }
 
