@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using SIGEBI.Api.Validation;
 using SIGEBI.Domain.ValueObjects;
 
 namespace SIGEBI.Api.Dtos;
@@ -15,15 +17,15 @@ public record PrestamoDto(
     DateTime? ActualizadoUtc);
 
 public record CrearPrestamoRequest(
-    Guid LibroId,
-    Guid UsuarioId,
-    DateTime FechaInicioUtc,
-    DateTime FechaFinUtc);
+    [property: NotEmptyGuid] Guid LibroId,
+    [property: NotEmptyGuid] Guid UsuarioId,
+    [property: Required] DateTime FechaInicioUtc,
+    [property: Required] DateTime FechaFinUtc);
 
 public record RegistrarDevolucionRequest(
-    DateTime FechaEntregaUtc,
-    string? Observaciones);
+    [property: Required] DateTime FechaEntregaUtc,
+    [property: StringLength(500)] string? Observaciones);
 
-public record CancelarPrestamoRequest(string Motivo);
+public record CancelarPrestamoRequest([property: Required, StringLength(500)] string Motivo);
 
-public record ExtenderPrestamoRequest(int Dias);
+public record ExtenderPrestamoRequest([property: Range(1, int.MaxValue)] int Dias);

@@ -1,14 +1,19 @@
+using FluentValidation.AspNetCore;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using SIGEBI.Application;
 using SIGEBI.IOC;
 using SIGEBI.Persistence;
+using SIGEBI.Api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSIGEBIPersistence(builder.Configuration);
+builder.Services.AddSIGEBIApplication();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddFluentValidationAutoValidation();
 
 var app = builder.Build();
 
@@ -18,6 +23,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
@@ -25,6 +32,10 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program
+{
+}
 
 static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
 {

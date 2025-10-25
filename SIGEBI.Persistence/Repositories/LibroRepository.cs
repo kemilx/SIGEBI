@@ -46,5 +46,22 @@ namespace SIGEBI.Persistence.Repositories
 
         public async Task<int> ContarPorEstadoAsync(EstadoLibro estado, CancellationToken ct = default)
             => await _context.Libros.CountAsync(l => l.Estado == estado, ct);
+
+        public async Task<bool> IsbnExisteAsync(string isbn, Guid? excluirId = null, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(isbn))
+            {
+                return false;
+            }
+
+            var query = _context.Libros.AsNoTracking().Where(l => l.Isbn == isbn.Trim());
+
+            if (excluirId.HasValue)
+            {
+                query = query.Where(l => l.Id != excluirId.Value);
+            }
+
+            return await query.AnyAsync(ct);
+        }
     }
 }

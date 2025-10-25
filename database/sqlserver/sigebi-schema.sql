@@ -105,6 +105,9 @@ GO
 CREATE INDEX IX_Libros_Estado ON dbo.Libros(Estado);
 GO
 
+CREATE UNIQUE INDEX IX_Libros_Isbn ON dbo.Libros(Isbn) WHERE Isbn IS NOT NULL;
+GO
+
 -- ========================================
 --  Tabla: Prestamos
 -- ========================================
