@@ -1,6 +1,8 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SIGEBI.Api.Dtos;
-using SIGEBI.Domain.Repository;
+using SIGEBI.Application.Interfaces;
 
 namespace SIGEBI.Api.Controllers;
 
@@ -8,39 +10,25 @@ namespace SIGEBI.Api.Controllers;
 [Route("api/[controller]")]
 public class AdminController : ControllerBase
 {
-    private readonly IAdminRepository _adminRepository;
-    private readonly IUsuarioRepository _usuarioRepository;
-    private readonly ILibroRepository _libroRepository;
+    private readonly IAdminService _adminService;
 
-    public AdminController(
-        IAdminRepository adminRepository,
-        IUsuarioRepository usuarioRepository,
-        ILibroRepository libroRepository)
+    public AdminController(IAdminService adminService)
     {
-        _adminRepository = adminRepository;
-        _usuarioRepository = usuarioRepository;
-        _libroRepository = libroRepository;
+        _adminService = adminService;
     }
 
     [HttpGet("resumen")]
     public async Task<ActionResult<ReporteDto>> ObtenerResumen(CancellationToken ct)
     {
-        var totalUsuarios = await _adminRepository.ContarUsuariosAsync(ct);
-        var usuariosActivos = await _usuarioRepository.ContarActivosAsync(ct);
-        var totalLibros = await _adminRepository.ContarLibrosAsync(ct);
-        var librosDisponibles = await _libroRepository.ContarDisponiblesAsync(ct);
-        var prestamosActivos = await _adminRepository.ContarPrestamosActivosAsync(ct);
-        var prestamosVencidos = await _adminRepository.ContarPrestamosVencidosAsync(ct);
-        var penalizacionesActivas = await _adminRepository.ContarPenalizacionesActivasAsync(ct);
-
+        var resumen = await _adminService.ObtenerResumenAsync(ct);
         var dto = new ReporteDto(
-            totalUsuarios,
-            usuariosActivos,
-            totalLibros,
-            librosDisponibles,
-            prestamosActivos,
-            prestamosVencidos,
-            penalizacionesActivas);
+            resumen.TotalUsuarios,
+            resumen.UsuariosActivos,
+            resumen.TotalLibros,
+            resumen.LibrosDisponibles,
+            resumen.PrestamosActivos,
+            resumen.PrestamosVencidos,
+            resumen.PenalizacionesActivas);
 
         return Ok(dto);
     }

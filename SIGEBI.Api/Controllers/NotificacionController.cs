@@ -1,8 +1,12 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SIGEBI.Api.Dtos;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Domain.Entities;
-using SIGEBI.Domain.Repository;
 
 namespace SIGEBI.Api.Controllers;
 
@@ -10,59 +14,40 @@ namespace SIGEBI.Api.Controllers;
 [Route("api/[controller]")]
 public class NotificacionController : ControllerBase
 {
-    private readonly INotificacionRepository _notificacionRepository;
-    private readonly IUsuarioRepository _usuarioRepository;
+    private readonly INotificacionService _notificacionService;
 
-    public NotificacionController(INotificacionRepository notificacionRepository, IUsuarioRepository usuarioRepository)
+    public NotificacionController(INotificacionService notificacionService)
     {
-        _notificacionRepository = notificacionRepository;
-        _usuarioRepository = usuarioRepository;
+        _notificacionService = notificacionService;
     }
 
     [HttpPost]
     public async Task<ActionResult<NotificacionDto>> Crear([FromBody] CrearNotificacionRequest request, CancellationToken ct)
     {
-        var usuario = await _usuarioRepository.GetByIdAsync(request.UsuarioId, ct);
-        if (usuario is null) return NotFound(new { message = "El usuario indicado no existe." });
-
-        try
-        {
-            var notificacion = Notificacion.Crear(request.UsuarioId, request.Titulo, request.Mensaje, request.Tipo);
-            await _notificacionRepository.AddAsync(notificacion, ct);
-            return CreatedAtAction(nameof(ObtenerPendientes), new { usuarioId = request.UsuarioId }, Map(notificacion));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var notificacion = await _notificacionService.CrearAsync(request.UsuarioId, request.Titulo, request.Mensaje, request.Tipo, ct);
+        return CreatedAtAction(nameof(ObtenerPendientes), new { usuarioId = request.UsuarioId }, Map(notificacion));
     }
 
     [HttpGet("usuario/{usuarioId:guid}/pendientes")]
     public async Task<ActionResult<IEnumerable<NotificacionDto>>> ObtenerPendientes(Guid usuarioId, CancellationToken ct)
     {
-        var pendientes = await _notificacionRepository.ObtenerNoLeidasPorUsuarioAsync(usuarioId, ct);
+        var pendientes = await _notificacionService.ObtenerPendientesAsync(usuarioId, ct);
         return Ok(pendientes.Select(Map));
     }
 
     [HttpPost("usuario/{usuarioId:guid}/marcar-leidas")]
     public async Task<IActionResult> MarcarLeidas(Guid usuarioId, CancellationToken ct)
     {
-        var pendientes = await _notificacionRepository.ObtenerNoLeidasPorUsuarioAsync(usuarioId, ct);
-        if (!pendientes.Any()) return NoContent();
+        var totalMarcadas = await _notificacionService.MarcarLeidasAsync(usuarioId, ct);
+        if (totalMarcadas == 0) return NoContent();
 
-        foreach (var notificacion in pendientes)
-        {
-            notificacion.MarcarComoLeida();
-            await _notificacionRepository.UpdateAsync(notificacion, ct);
-        }
-
-        return Ok(new { message = "Notificaciones marcadas como leídas." });
+        return Ok(new { total = totalMarcadas });
     }
 
     [HttpGet("usuario/{usuarioId:guid}/contador")]
     public async Task<ActionResult<int>> ContarPendientes(Guid usuarioId, CancellationToken ct)
     {
-        var total = await _notificacionRepository.ContarNoLeidasAsync(usuarioId, ct);
+        var total = await _notificacionService.ContarPendientesAsync(usuarioId, ct);
         return Ok(total);
     }
 

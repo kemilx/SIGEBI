@@ -1,11 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using SIGEBI.Api.Dtos;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Application.Prestamos.Commands;
-using SIGEBI.Application.Prestamos.Services;
 using SIGEBI.Domain.Entities;
-using SIGEBI.Domain.Repository;
-using SIGEBI.Domain.ValueObjects;
 
 namespace SIGEBI.Api.Controllers;
 
@@ -13,46 +15,39 @@ namespace SIGEBI.Api.Controllers;
 [Route("api/[controller]")]
 public class PrestamoController : ControllerBase
 {
-    private readonly IPrestamoRepository _prestamoRepository;
     private readonly IPrestamoService _prestamoService;
 
-    public PrestamoController(
-        IPrestamoRepository prestamoRepository,
-        IPrestamoService prestamoService)
+    public PrestamoController(IPrestamoService prestamoService)
     {
-        _prestamoRepository = prestamoRepository;
         _prestamoService = prestamoService;
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PrestamoDto>> ObtenerPorId(Guid id, CancellationToken ct)
     {
-        var prestamo = await _prestamoRepository.GetByIdAsync(id, ct);
-        if (prestamo is null) return NotFound();
-
+        var prestamo = await _prestamoService.ObtenerPorIdAsync(id, ct);
         return Ok(Map(prestamo));
     }
 
     [HttpGet("usuario/{usuarioId:guid}")]
     public async Task<ActionResult<IEnumerable<PrestamoDto>>> ObtenerPorUsuario(Guid usuarioId, CancellationToken ct)
     {
-        var prestamos = await _prestamoRepository.ObtenerPorUsuarioAsync(usuarioId, ct);
+        var prestamos = await _prestamoService.ObtenerPorUsuarioAsync(usuarioId, ct);
         return Ok(prestamos.Select(Map));
     }
 
     [HttpGet("libro/{libroId:guid}")]
     public async Task<ActionResult<IEnumerable<PrestamoDto>>> ObtenerActivosPorLibro(Guid libroId, CancellationToken ct)
     {
-        var prestamos = await _prestamoRepository.ObtenerActivosPorLibroAsync(libroId, ct);
+        var prestamos = await _prestamoService.ObtenerActivosPorLibroAsync(libroId, ct);
         return Ok(prestamos.Select(Map));
     }
 
     [HttpGet("vencidos")]
     public async Task<ActionResult<IEnumerable<PrestamoDto>>> ObtenerVencidos([FromQuery] DateTime? referenciaUtc, CancellationToken ct)
     {
-        var referencia = referenciaUtc ?? DateTime.UtcNow;
-        var vencidos = await _prestamoRepository.ObtenerVencidosAsync(referencia, ct);
-        return Ok(vencidos.Select(Map));
+        var prestamos = await _prestamoService.ObtenerVencidosAsync(referenciaUtc ?? DateTime.UtcNow, ct);
+        return Ok(prestamos.Select(Map));
     }
 
     [HttpPost]

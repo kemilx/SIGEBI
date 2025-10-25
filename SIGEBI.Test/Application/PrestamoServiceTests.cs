@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using Moq;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Application.Prestamos.Commands;
 using SIGEBI.Application.Prestamos.Services;
 using SIGEBI.Application.Prestamos.Validators;

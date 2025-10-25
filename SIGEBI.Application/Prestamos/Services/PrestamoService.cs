@@ -1,6 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using SIGEBI.Application.Common.Exceptions;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Application.Prestamos.Commands;
 using SIGEBI.Domain.Entities;
 using SIGEBI.Domain.Repository;
@@ -44,6 +49,18 @@ public sealed class PrestamoService : IPrestamoService
         _cancelarValidator = cancelarValidator;
         _extenderValidator = extenderValidator;
     }
+
+    public async Task<Prestamo> ObtenerPorIdAsync(Guid id, CancellationToken ct = default)
+        => await _prestamoRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Prestamo), id);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerPorUsuarioAsync(Guid usuarioId, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerPorUsuarioAsync(usuarioId, ct);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerActivosPorLibroAsync(Guid libroId, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerActivosPorLibroAsync(libroId, ct);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerVencidosAsync(DateTime referenciaUtc, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerVencidosAsync(referenciaUtc, ct);
 
     public async Task<Prestamo> CrearAsync(CrearPrestamoCommand command, CancellationToken ct = default)
     {
