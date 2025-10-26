@@ -41,12 +41,4 @@ public static class DependencyInjection
 
         return services;
     }
-
-    public static IServiceCollection AddSIGEBIDependencies(this IServiceCollection services, IConfiguration configuration)
-    {
-        services.AddSIGEBIPersistence(configuration);
-        services.AddSIGEBIApplication();
-
-        return services;
-    }
 }

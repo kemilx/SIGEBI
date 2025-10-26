@@ -1,3 +1,4 @@
+using System.Threading.Tasks; 
 using FluentValidation.AspNetCore;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -29,30 +30,34 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+
+await Program.EnsureDatabaseCreatedAsync(app.Services);
+
+await app.RunAsync();
 
 public partial class Program
 {
-}
-
-static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
-{
-    using var scope = services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<SIGEBIDbContext>();
-
-    if (!context.Database.IsRelational())
+    public static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
     {
-        return;
-    }
+        using var scope = services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<SIGEBIDbContext>();
 
-    try
-    {
-        await context.Database.EnsureCreatedAsync();
-    }
-    catch (SqlException ex)
-    {
-        throw new InvalidOperationException(
-            "No se pudo crear o abrir la base de datos SIGEBI. Verifica la cadena de conexión y los permisos del usuario actual.",
-            ex);
+      
+        if (!context.Database.IsRelational())
+            return;
+
+        try
+        {
+            
+            await context.Database.EnsureCreatedAsync();
+           
+         
+        }
+        catch (SqlException ex)
+        {
+            throw new InvalidOperationException(
+                "No se pudo crear o abrir la base de datos SIGEBI. Verifica la cadena de conexión y los permisos del usuario actual.",
+                ex);
+        }
     }
 }
