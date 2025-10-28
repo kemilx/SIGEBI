@@ -1,6 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using SIGEBI.Application.Common.Exceptions;
+using SIGEBI.Application.Interfaces;
 using SIGEBI.Application.Prestamos.Commands;
 using SIGEBI.Domain.Entities;
 using SIGEBI.Domain.Repository;
@@ -45,6 +50,18 @@ public sealed class PrestamoService : IPrestamoService
         _extenderValidator = extenderValidator;
     }
 
+    public async Task<Prestamo> ObtenerPorIdAsync(Guid id, CancellationToken ct = default)
+        => await _prestamoRepository.GetByIdAsync(id, ct) ?? throw new NotFoundException(nameof(Prestamo), id);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerPorUsuarioAsync(Guid usuarioId, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerPorUsuarioAsync(usuarioId, ct);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerActivosPorLibroAsync(Guid libroId, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerActivosPorLibroAsync(libroId, ct);
+
+    public async Task<IReadOnlyList<Prestamo>> ObtenerVencidosAsync(DateTime referenciaUtc, CancellationToken ct = default)
+        => await _prestamoRepository.ObtenerVencidosAsync(referenciaUtc, ct);
+
     public async Task<Prestamo> CrearAsync(CrearPrestamoCommand command, CancellationToken ct = default)
     {
         await _crearValidator.ValidateAndThrowAsync(command, ct);
@@ -60,20 +77,25 @@ public sealed class PrestamoService : IPrestamoService
             throw new ValidationException(new[] { new ValidationFailure(nameof(command.UsuarioId), "El usuario debe estar activo para solicitar préstamos.") });
         }
 
-        if (!libro.DisponibleParaPrestamo())
-        {
-            throw new ValidationException(new[] { new ValidationFailure(nameof(command.LibroId), "El libro no cuenta con ejemplares disponibles.") });
-        }
-
         var existePrestamoPendiente = await _prestamoRepository.ExistePrestamoActivoOPendienteAsync(command.LibroId, command.UsuarioId, ct);
         if (existePrestamoPendiente)
         {
             throw new ValidationException(new[] { new ValidationFailure("Prestamo", "El usuario ya tiene un préstamo pendiente o activo para este libro.") });
         }
 
+        try
+        {
+            libro.ReservarEjemplar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ValidationException(new[] { new ValidationFailure(nameof(command.LibroId), ex.Message) });
+        }
+
         var periodo = PeriodoPrestamo.Create(command.FechaInicioUtc, command.FechaFinUtc);
         var prestamo = Prestamo.Solicitar(command.LibroId, command.UsuarioId, periodo);
 
+        await _libroRepository.UpdateAsync(libro, ct);
         await _prestamoRepository.AddAsync(prestamo, ct);
         return prestamo;
     }
@@ -96,23 +118,23 @@ public sealed class PrestamoService : IPrestamoService
             throw new ValidationException(new[] { new ValidationFailure(nameof(prestamo.UsuarioId), "El usuario debe estar activo para activar el préstamo.") });
         }
 
-        if (!libro.DisponibleParaPrestamo())
-        {
-            throw new ValidationException(new[] { new ValidationFailure(nameof(prestamo.LibroId), "El libro no cuenta con ejemplares disponibles.") });
-        }
-
         try
         {
-            libro.MarcarPrestado();
+            var estadoOriginal = libro.Estado;
+            libro.ConfirmarPrestamoReservado();
             prestamo.Activar();
             usuario.RegistrarPrestamo(prestamo.Id);
+
+            if (libro.Estado != estadoOriginal)
+            {
+                await _libroRepository.UpdateAsync(libro, ct);
+            }
         }
         catch (InvalidOperationException ex)
         {
             throw new ValidationException(new[] { new ValidationFailure(nameof(Prestamo.Estado), ex.Message) });
         }
 
-        await _libroRepository.UpdateAsync(libro, ct);
         await _prestamoRepository.UpdateAsync(prestamo, ct);
         await _usuarioRepository.UpdateAsync(usuario, ct);
 
@@ -158,6 +180,12 @@ public sealed class PrestamoService : IPrestamoService
         var prestamo = await _prestamoRepository.GetByIdAsync(command.PrestamoId, ct)
                        ?? throw new NotFoundException(nameof(Prestamo), command.PrestamoId);
 
+        var libro = await _libroRepository.GetByIdAsync(prestamo.LibroId, ct)
+                    ?? throw new NotFoundException(nameof(Libro), prestamo.LibroId);
+        var estadoPrestamoAnterior = prestamo.Estado;
+        var estadoLibroAnterior = libro.Estado;
+        var ejemplaresDisponiblesAntes = libro.EjemplaresDisponibles;
+
         try
         {
             prestamo.Cancelar(command.Motivo);
@@ -169,6 +197,26 @@ public sealed class PrestamoService : IPrestamoService
         catch (InvalidOperationException ex)
         {
             throw new ValidationException(new[] { new ValidationFailure(nameof(Prestamo.Estado), ex.Message) });
+        }
+
+        if (estadoPrestamoAnterior is EstadoPrestamo.Pendiente or EstadoPrestamo.Activo)
+        {
+            try
+            {
+                libro.MarcarDevuelto();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new ValidationException(new[] { new ValidationFailure(nameof(prestamo.LibroId), ex.Message) });
+            }
+        }
+
+        if (estadoPrestamoAnterior is EstadoPrestamo.Pendiente or EstadoPrestamo.Activo)
+        {
+            if (libro.Estado != estadoLibroAnterior || libro.EjemplaresDisponibles != ejemplaresDisponiblesAntes)
+            {
+                await _libroRepository.UpdateAsync(libro, ct);
+            }
         }
 
         await _prestamoRepository.UpdateAsync(prestamo, ct);

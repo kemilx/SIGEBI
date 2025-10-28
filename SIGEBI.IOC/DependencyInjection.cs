@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SIGEBI.Application;
 using SIGEBI.Domain.Repository;
 using SIGEBI.Persistence;
 using SIGEBI.Persistence.Repositories;
@@ -28,7 +29,15 @@ public static class DependencyInjection
         services.AddScoped<INotificacionRepository, NotificacionRepository>();
         services.AddScoped<IPenalizacionRepository, PenalizacionRepository>();
         services.AddScoped<IAdminRepository, AdminRepository>();
-        services.AddScoped<RolRepository>();
+        services.AddScoped<IRolRepository, RolRepository>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddSIGEBIDependencies(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddSIGEBIPersistence(configuration);
+        services.AddSIGEBIApplication();
 
         return services;
     }

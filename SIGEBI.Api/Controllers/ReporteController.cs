@@ -1,8 +1,8 @@
-using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SIGEBI.Domain.Repository;
-using SIGEBI.Domain.ValueObjects;
+using SIGEBI.Application.Interfaces;
 
 namespace SIGEBI.Api.Controllers;
 
@@ -10,60 +10,38 @@ namespace SIGEBI.Api.Controllers;
 [Route("api/[controller]")]
 public class ReporteController : ControllerBase
 {
-    private readonly ILibroRepository _libroRepository;
-    private readonly IPrestamoRepository _prestamoRepository;
-    private readonly IPenalizacionRepository _penalizacionRepository;
-    private readonly IUsuarioRepository _usuarioRepository;
+    private readonly IReporteService _reporteService;
 
-    public ReporteController(
-        ILibroRepository libroRepository,
-        IPrestamoRepository prestamoRepository,
-        IPenalizacionRepository penalizacionRepository,
-        IUsuarioRepository usuarioRepository)
+    public ReporteController(IReporteService reporteService)
     {
-        _libroRepository = libroRepository;
-        _prestamoRepository = prestamoRepository;
-        _penalizacionRepository = penalizacionRepository;
-        _usuarioRepository = usuarioRepository;
+        _reporteService = reporteService;
     }
 
     [HttpGet("libros-por-estado")]
-    public async Task<ActionResult<IDictionary<string, int>>> LibrosPorEstado(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyDictionary<string, int>>> LibrosPorEstado(CancellationToken ct)
     {
-        var result = new Dictionary<string, int>();
-        foreach (var estado in Enum.GetValues<EstadoLibro>())
-        {
-            var cantidad = await _libroRepository.ContarPorEstadoAsync(estado, ct);
-            result[estado.ToString()] = cantidad;
-        }
-
+        var result = await _reporteService.ObtenerLibrosPorEstadoAsync(ct);
         return Ok(result);
     }
 
     [HttpGet("prestamos-por-estado")]
-    public async Task<ActionResult<IDictionary<string, int>>> PrestamosPorEstado(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyDictionary<string, int>>> PrestamosPorEstado(CancellationToken ct)
     {
-        var result = new Dictionary<string, int>();
-        foreach (var estado in Enum.GetValues<EstadoPrestamo>())
-        {
-            var cantidad = await _prestamoRepository.ContarPorEstadoAsync(estado, ct);
-            result[estado.ToString()] = cantidad;
-        }
-
+        var result = await _reporteService.ObtenerPrestamosPorEstadoAsync(ct);
         return Ok(result);
     }
 
     [HttpGet("penalizaciones-activas")]
     public async Task<ActionResult<int>> PenalizacionesActivas(CancellationToken ct)
     {
-        var total = await _penalizacionRepository.ContarActivasAsync(ct);
+        var total = await _reporteService.ContarPenalizacionesActivasAsync(ct);
         return Ok(total);
     }
 
     [HttpGet("usuarios-activos")]
     public async Task<ActionResult<int>> UsuariosActivos(CancellationToken ct)
     {
-        var total = await _usuarioRepository.ContarActivosAsync(ct);
+        var total = await _reporteService.ContarUsuariosActivosAsync(ct);
         return Ok(total);
     }
 }

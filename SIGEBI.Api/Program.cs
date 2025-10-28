@@ -1,15 +1,13 @@
 using FluentValidation.AspNetCore;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using SIGEBI.Application;
 using SIGEBI.IOC;
 using SIGEBI.Persistence;
 using SIGEBI.Api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSIGEBIPersistence(builder.Configuration);
-builder.Services.AddSIGEBIApplication();
+builder.Services.AddSIGEBIDependencies(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
