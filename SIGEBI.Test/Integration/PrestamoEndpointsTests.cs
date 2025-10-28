@@ -35,7 +35,7 @@ public class PrestamoEndpointsTests : IClassFixture<PrestamoApiFactory>
         var usuario = Usuario.Create(
             NombreCompleto.Create("Carla", "Suarez"),
             EmailAddress.Create("carla@example.com"),
-            TipoUsuario.Lector);
+            TipoUsuario.Estudiante);
 
         context.Libros.Add(libro);
         context.Usuarios.Add(usuario);

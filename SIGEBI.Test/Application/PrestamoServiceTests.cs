@@ -42,7 +42,7 @@ public class PrestamoServiceTests
         var usuario = Usuario.Create(
             NombreCompleto.Create("Ana", "Pérez"),
             EmailAddress.Create("ana@example.com"),
-            TipoUsuario.Lector);
+            TipoUsuario.Estudiante);
 
         _libroRepository.Setup(r => r.GetByIdAsync(libro.Id, It.IsAny<CancellationToken>()))
                         .ReturnsAsync(libro);
